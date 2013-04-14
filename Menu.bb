@@ -39,12 +39,66 @@ Global SavePath$ = "Saves\"
 ;nykyisen tallennuksen nimi ja samalla missä kansiossa tallennustiedosto sijaitsee saves-kansiossa
 Global CurrSave$
 
-Global SaveGameAmount%
-Dim SaveGames$(SaveGameAmount+1) 
-Dim SaveGameTime$(SaveGameAmount + 1)
-Dim SaveGameDate$(SaveGameAmount + 1)
+Type Client ;Mp mod
+	Field stream
+	Field name$
+	Field ready%
+	
+	Field Obj
+	Field Collider
+	
+	Field Crouch
+	
+	Field x#,y#,z#,yaw#
+	Field lx#,ly#,lz#,lyaw#
+	Field ft%,lft%
+	
+	Field currspeedT#,dir%
+End Type
 
-LoadSaveGames()
+Global CurrPort$ = "25550" ;Mp mod
+Global CurrIp$ = "127.0.0.1"
+Global CurrName$ = "Player"
+Global MpMyID% = 0
+
+Global MpConn ;Mp mod
+Global MpStream
+Global MpNumClients
+Dim MpClients.Client(MpMaxClients)
+
+Global SaveGameAmount%
+
+myDir=ReadDir(SavePath) 
+Repeat 
+	file$=NextFile$(myDir) 
+	If file$="" Then Exit 
+	If FileType(folder$+"\"+file$) = 2 Then 
+		SaveGameAmount=SaveGameAmount+1
+	End If 
+Forever 
+CloseDir myDir 
+
+Dim SaveGames$(SaveGameAmount+1) 
+
+myDir=ReadDir(SavePath) 
+i = 0
+Repeat 
+	file$=NextFile$(myDir) 
+	If file$="" Then Exit 
+	If FileType(folder$+"\"+file$) = 2 Then 
+		SaveGames(i) = file
+		i=i+1
+	End If 
+Forever 
+CloseDir myDir 
+
+Dim SaveGameTime%(SaveGameAmount + 1)
+Dim SaveGameDate%(SaveGamesamount + 1)
+For i = 1 To SaveGamesamount
+	Local f% = ReadFile(SavePath + SaveGames(i - 1) + "\save.txt")
+	SaveGameTime(i - 1) = ReadInt(f)
+	CloseFile f
+Next
 
 
 Dim KeyName$(211)
@@ -189,7 +243,7 @@ Function UpdateMainMenu()
 	EndIf
 	
 	If MainMenuTab = 0 Then
-		For i% = 0 To 3
+		For i% = 0 To 4
 			temp = False
 			x = 159 * MenuScale
 			y = (286 + 100 * i) * MenuScale
@@ -212,7 +266,7 @@ Function UpdateMainMenu()
 					txt = "NEW GAME"
 					RandomSeed = ""
 					If temp Then 
-						If Rand(15)=1 Then 
+						If Rand(10)=1 Then 
 							Select Rand(10)
 								Case 1 
 									RandomSeed = "NIL"
@@ -256,9 +310,12 @@ Function UpdateMainMenu()
 						MainMenuTab = 2
 					EndIf
 				Case 2
+					txt = "MULTIPLAYER" ;MP mod
+					If temp Then MainMenuTab = 4
+				Case 3
 					txt = "OPTIONS"
 					If temp Then MainMenuTab = 3
-				Case 3
+				Case 4
 					txt = "QUIT"
 					If temp Then
 						;DeInitExt
@@ -303,8 +360,33 @@ Function UpdateMainMenu()
 					
 			End Select
 			
-			MainMenuTab = 0
+			If MainMenuTab = 5 Then
+				If mpState = 2 Then
+					If MpStream Then
+						WriteLine MpStream,"drop"
+						DebugLog "Drop sent"
+					EndIf
+					For i% = 0 To MpNumClients - 1
+						Delete MpClients(i%)
+					Next
+					MpNumClients = 0
+				EndIf
+				If mpState = 1 Then
+					For i% = 1 To MpNumClients - 1
+						WriteLine MpClients(i%)\stream,"serverClosed"
+						Delete MpClients(i%)
+					Next
+					Delete MpClients(0)
+					MpNumClients = 0
+					CloseTCPServer MpConn
+				EndIf
+				MainMenuTab = 4
+			Else
+				MainMenuTab = 0
+			EndIf
 		EndIf
+		
+		
 		
 		Select MainMenuTab
 			Case 1 ; New game
@@ -360,6 +442,9 @@ Function UpdateMainMenu()
 						If RandomSeed = "" Then
 							RandomSeed = Abs(MilliSecs())
 						EndIf
+						
+						mpState = 0
+						
 						Local strtemp$ = ""
 						For i = 1 To Len(RandomSeed)
 							strtemp = strtemp+Asc(Mid(strtemp,i,1))
@@ -414,18 +499,16 @@ Function UpdateMainMenu()
 				Else
 					x = x + 20 * MenuScale
 					y = y + 20 * MenuScale
-					For i% = 1 To SaveGameAmount
+					For  i% = 1 To SaveGameAmount
 						Rect(x, y, (580 - 40)* MenuScale, 70* MenuScale)
 						Color(0, 0, 0)
 						Rect(x + 2 * MenuScale, y + 2 * MenuScale, (580 - 40 - 4) * MenuScale, (70 - 4) * MenuScale)
 						Color(255, 255, 255)	
 						;rect(x, y, 180, 80)	
 						Text(x + 20 * MenuScale, y + 10 * MenuScale, SaveGames(i - 1))
-						Text(x + 20 * MenuScale, y + (10+23) * MenuScale, SaveGameTime(i - 1))
-						Text(x + 120 * MenuScale, y + (10+23) * MenuScale, SaveGameDate(i - 1))
 						;text(x + 20, y + 30, ("Playing time: " + SaveGameTime[i - 1]))
 						
-						If DrawButton(x + 280 * MenuScale, y + 20 * MenuScale, 100 * MenuScale, 30 * MenuScale, "Load", False) Then
+						If DrawButton(x + 200 * MenuScale, y + 20 * MenuScale, 100 * MenuScale, 30 * MenuScale, "Load", False) Then
 							LoadEntities()
 							LoadGame(SavePath + SaveGames(i - 1) + "\")
 							CurrSave = SaveGames(i - 1)
@@ -433,7 +516,7 @@ Function UpdateMainMenu()
 							MainMenuOpen = False
 						EndIf
 						
-						If DrawButton(x + 400 * MenuScale, y + 20 * MenuScale, 100 * MenuScale, 30 * MenuScale, "Delete", False) Then
+						If DrawButton(x + 320 * MenuScale, y + 20 * MenuScale, 100 * MenuScale, 30 * MenuScale, "Delete", False) Then
 							DeleteFile(CurrentDir()+SavePath + SaveGames(i - 1)+"\save.txt")
 							DeleteDir(CurrentDir()+SavePath + SaveGames(i - 1))
 							DebugLog CurrentDir()+SavePath + SaveGames(i - 1)
@@ -444,6 +527,295 @@ Function UpdateMainMenu()
 						y=y+80 * MenuScale
 					Next
 				EndIf
+				
+			Case 4 ;MP mod
+				
+				If MpConn Then
+					CloseTCPServer MpConn
+				EndIf
+				
+				MpConn = 0
+				MpStream = 0
+				MpNumClient = 0
+				
+				y = y + height + 20 * MenuScale
+				width = 580 * MenuScale
+				height = 300 * MenuScale
+				
+				DrawFrame(x, y, width, height)
+				
+				x = 159 * MenuScale
+				y = 286 * MenuScale
+				
+				width = 400 * MenuScale
+				height = 70 * MenuScale
+				
+				SetFont Font2				
+				Color(255, 255, 255)
+				SetFont Font2
+				Text(x + width / 2, y + height / 2, "MULTIPLAYER", True, True)
+				SetFont Font1
+				
+				x = 160 * MenuScale
+				y = y + height + 20 * MenuScale
+				width = 580 * MenuScale
+				height = 296 * MenuScale
+				
+				Text(x + 20 * MenuScale, y + 30 * MenuScale, "Name:")
+				CurrName = InputBox(x + 75 * MenuScale, y + 20 * MenuScale, 300 * MenuScale, 30 * MenuScale, CurrName, 1)
+				
+				Text(x + 20 * MenuScale, y + 80 * MenuScale, "Port:")
+				CurrPort = InputBox(x + 75 * MenuScale, y + 70 * MenuScale, 200 * MenuScale, 30 * MenuScale, CurrPort, 2)
+				
+				Text(x + 20 * MenuScale, y + 130 * MenuScale, "IP:")
+				CurrIP = InputBox(x + 75 * MenuScale, y + 120 * MenuScale, 200 * MenuScale, 30 * MenuScale, CurrIP, 3)
+				
+				If DrawButton(x + 320 * MenuScale,  y + 70 * MenuScale, 130 * MenuScale, 30 * MenuScale, "Host", False) Then
+					MpConn=CreateTCPServer(CurrPort)
+					mpState = 1
+					MainMenuTab = 5
+					MpNumClients = 1
+					MpMyID = 0
+					MpClients(0) = New Client
+					MpClients(0)\name = CurrName
+					DebugLog "Hosting"
+				EndIf
+
+				If DrawButton(x + 320 * MenuScale,  y + 120 * MenuScale, 130 * MenuScale, 30 * MenuScale, "Connect", False) Then
+					MpStream=OpenTCPStream(CurrIp,CurrPort)
+					If Not MpStream Then
+						mpState = 0
+						MainMenuTab = 0
+						DebugLog "Failed to create stream"
+					Else
+						WriteLine MpStream,CurrName
+						
+						avail = 0
+						For i%=0 To 4000
+							If ReadAvail(MpStream) Then
+								avail = 1
+								Exit
+							EndIf
+							Delay 1
+						Next
+						
+						If avail Then
+							msg$=ReadLine(MpStream)
+							If msg$ = "pass"
+								MainMenuTab = 5
+								mpState = 2
+								DebugLog "Connected"
+								msg$ = ReadLine(MpStream)
+								DebugLog "ClientNum: " + msg$
+								For i% = 0 To Int%(msg)
+									MpClients(i%) = New Client
+									MpClients(i%)\name = ReadLine(MpStream)
+									DebugLog "Rec: " + MpClients(i%)\name
+								Next
+								MpNumClients = Int%(msg)+1
+								MpMyID = MpNumClients - 1
+							Else
+								mpState = 0
+								MainMenuTab = 0
+								DebugLog "Connection refused"
+							EndIf
+						Else
+							mpState = 0
+							MainMenuTab = 0
+							DebugLog "Server not responding"
+						EndIf
+					EndIf
+				EndIf
+	
+			Case 5 ;MP mod
+				
+				y = y + height + 20 * MenuScale
+				width = 580 * MenuScale
+				height = 300 * MenuScale
+				
+				DrawFrame(x, y, width, height)
+				DrawFrame(x, y, width/3, height)
+				
+				x = 159 * MenuScale
+				y = 286 * MenuScale
+				
+				width = 400 * MenuScale
+				height = 70 * MenuScale
+				
+				SetFont Font2				
+				Color(255, 255, 255)
+				
+				If mpState = 1 Then
+					If MpConn Then
+						MpStream = AcceptTCPStream(MpConn)
+					EndIf
+					If MpStream Then
+						CurC% = MpNumClients
+						MpClients(CurC) = New Client
+						MpClients(CurC)\stream = MpStream
+						msg$=ReadLine(MpStream)
+						MpClients(CurC)\name=msg$
+						WriteLine MpStream,"pass"
+						WriteLine MpStream,MpNumClients
+						For i% = 0 To MpNumClients
+							WriteLine MpStream,MpClients(i%)\name
+						Next
+						
+						For i% = 1 To MpNumClients - 1
+							WriteLine MpClients(i%)\stream,"newclient"
+							WriteLine MpClients(i%)\stream,msg$
+						Next
+						
+						MpNumClients = MpNumClients+1
+						DebugLog "New client: " + msg$
+					EndIf
+					
+					For  i% = 1 To MpNumClients - 1
+						If ReadAvail(MpClients(i%)\stream) Then
+							msg$ = ReadLine(MpClients(i%)\stream)
+							If msg$ = "drop" Then
+								For j% = i% + 1 To MpNumClients - 1
+									MpClients(j%-1)=MpClients(j%)
+								Next
+								;Delete MpClients(MpNumClients - 1)
+								MpNumClients = MpNumClients - 1
+								
+								For i% = 1 To MpNumClients - 1
+									WriteLine MpClients(i%)\stream,"dropclient"
+									WriteLine MpClients(i%)\stream,i%
+								Next 
+							EndIf
+						EndIf
+					Next
+					Text(x + width / 2, y + height / 2, "Hosting", True, True)
+					
+					If DrawButton(x + 420 * MenuScale, y + height + 340 * MenuScale, (580 - 400 - 20) * MenuScale, 70 * MenuScale, "START", False) Then
+						If RandomSeed = "" Then
+							RandomSeed = Abs(MilliSecs())
+						EndIf
+						
+						;Local strtemp$ = ""
+						For i = 1 To Len(RandomSeed)
+							strtemp = strtemp+Asc(Mid(strtemp,i,1))
+						Next
+						SeedRnd Abs(Int(strtemp))
+						
+						;Local SameFound% = False
+						For  i% = 1 To SaveGameAmount
+							If SaveGames(i - 1) = CurrSave Then SameFound=SameFound+1
+						Next
+						
+						If SameFound > 0 Then CurrSave = CurrSave + " (" + (SameFound + 1) + ")"
+						
+						For i% = 1 To MpNumClients - 1
+							WriteLine MpClients(i%)\stream,"gamestart"
+							WriteLine MpClients(i%)\stream,RandomSeed
+							If i% = 1 Then
+								MpClients(i%)\Obj = LoadAnimMesh("GFX\npcs\classd.b3d");
+							Else
+								MpClients(i%)\Obj = CopyEntity (MpClients(1)\obj)
+							EndIf
+							tempS# = 0.5 / MeshWidth(MpClients(i%)\obj)
+							ScaleEntity MpClients(i%)\obj, tempS, tempS, tempS
+									
+							MpClients(i%)\Collider = CreatePivot()
+							EntityRadius MpClients(i%)\Collider, 0.32
+							EntityType MpClients(i%)\Collider, HIT_PLAYER
+						Next
+					
+						DebugLog "starting..."
+					
+						LoadEntities()
+						InitNewGame()
+						MainMenuOpen = False
+						FlushKeys()
+						FlushMouse()
+					EndIf
+				Else
+					Text(x + width / 2, y + height / 2, "Connected", True, True)
+					If MpStream Then
+						If ReadAvail(MpStream) Then
+							msg$ = ReadLine(MpStream)
+							If msg$ = "newclient" Then
+								msg$ = ReadLine(MpStream)
+								MpClients(MpNumClients) = New Client
+								MpClients(MpNumClients)\name = msg$
+								MpNumClients = MpNumClients + 1
+								DebugLog "New client: " + msg$
+							EndIf
+							If msg$ = "dropclient" Then
+								msg$ = ReadLine(MpStream)
+								i% = Int(msg$)
+								For j% = i% + 1 To MpNumClients - 1
+									MpClients(j%-1)=MpClients(j%)
+								Next
+								;Delete MpClients(MpNumClients - 1)
+								MpNumClients = MpNumClients - 1
+							EndIf
+							If msg$ = "serverClosed" Then
+								For j% = 0 To MpNumClients - 1
+									Delete MpClients(j%)
+								Next
+								;Delete MpClients(MpNumClients - 1)
+								MpNumClients = 0
+								mpState = 0
+								MainMenuTab = 0
+								CloseTCPStream MpStream
+								DebugLog "Server closed."
+							EndIf
+							If msg$ = "gamestart"
+								RandomSeed = ReadLine(MpStream)
+								;Local strtemp$ = ""
+								For i = 1 To Len(RandomSeed)
+									strtemp = strtemp+Asc(Mid(strtemp,i,1))
+								Next
+								SeedRnd Abs(Int(strtemp))
+								
+								;Local SameFound% = False
+								For  i% = 1 To SaveGameAmount
+									If SaveGames(i - 1) = CurrSave Then SameFound=SameFound+1
+								Next
+								
+								If SameFound > 0 Then CurrSave = CurrSave + " (" + (SameFound + 1) + ")"
+								
+								For i% = 0 To MpNumClients - 1
+									If i% <> MpMyID Then
+										If i% = 0 Then
+											MpClients(i%)\Obj = LoadAnimMesh("GFX\npcs\classd.b3d");
+										Else
+											MpClients(i%)\Obj = CopyEntity (MpClients(0)\obj)
+										EndIf
+										tempS# = 0.5 / MeshWidth(MpClients(i%)\obj)
+										ScaleEntity MpClients(i%)\obj, tempS, tempS, tempS
+										
+										MpClients(i%)\Collider = CreatePivot()
+										EntityRadius MpClients(i%)\Collider, 0.32
+										EntityType MpClients(i%)\Collider, HIT_PLAYER
+									EndIf
+								Next
+								
+								LoadEntities()
+								InitNewGame()
+								MainMenuOpen = False
+								FlushKeys()
+								FlushMouse()
+							EndIf
+						EndIf
+					EndIf
+				EndIf
+				
+				SetFont Font1
+				
+				x = 160 * MenuScale
+				y = y + height + 20 * MenuScale
+				width = 580 * MenuScale
+				height = 296 * MenuScale
+				
+				
+				
+				For i% = 0 To MpNumClients-1
+					Text(x + 20 * MenuScale, y + 30 * MenuScale + i% * 30 * MenuScale, MpClients(i%)\name)
+				Next
 				
 			Case 3
 				
@@ -499,23 +871,23 @@ Function UpdateMainMenu()
 				
 				Text (x + 20 * MenuScale, y + 220 * MenuScale, "Control configuration:")	
 				
-				Text (x + 20 * MenuScale, y + 240 * MenuScale, "Up")
-				InputBox(x + 170 * MenuScale, y + 240 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_UP,210)),5)		
+				Text (x + 20 * MenuScale, y + 240 * MenuScale, "Right")
+				InputBox(x + 170 * MenuScale, y + 240 * MenuScale,100,20,KeyName(Min(KEY_RIGHT,210)),4)				
 				Text (x + 20 * MenuScale, y + 260 * MenuScale, "Left")
-				InputBox(x + 170 * MenuScale, y + 260 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_LEFT,210)),3)	
-				Text (x + 20 * MenuScale, y + 280 * MenuScale, "Down")
-				InputBox(x + 170 * MenuScale, y + 280 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_DOWN,210)),6)				
-				Text (x + 20 * MenuScale, y + 300 * MenuScale, "Right")
-				InputBox(x + 170 * MenuScale, y + 300 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_RIGHT,210)),4)	
+				InputBox(x + 170 * MenuScale, y + 260 * MenuScale,100,20,KeyName(Min(KEY_LEFT,210)),3)
+				Text (x + 20 * MenuScale, y + 280 * MenuScale, "Up")
+				InputBox(x + 170 * MenuScale, y + 280 * MenuScale,100,20,KeyName(Min(KEY_UP,210)),5)
+				Text (x + 20 * MenuScale, y + 300 * MenuScale, "Down")
+				InputBox(x + 170 * MenuScale, y + 300 * MenuScale,100,20,KeyName(Min(KEY_DOWN,210)),6)
 				
 				Text (x + 300 * MenuScale, y + 240 * MenuScale, "Blink")
-				InputBox(x + 450 * MenuScale, y + 240 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_BLINK,210)),7)				
+				InputBox(x + 450 * MenuScale, y + 240 * MenuScale,100,20,KeyName(Min(KEY_BLINK,210)),7)				
 				Text (x + 300 * MenuScale, y + 260 * MenuScale, "Sprint")
-				InputBox(x + 450 * MenuScale, y + 260 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_SPRINT,210)),8)
+				InputBox(x + 450 * MenuScale, y + 260 * MenuScale,100,20,KeyName(Min(KEY_SPRINT,210)),8)
 				Text (x + 300 * MenuScale, y + 280 * MenuScale, "Inventory")
-				InputBox(x + 450 * MenuScale, y + 280 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_INV,210)),9)
+				InputBox(x + 450 * MenuScale, y + 280 * MenuScale,100,20,KeyName(Min(KEY_INV,210)),9)
 				Text (x + 300 * MenuScale, y + 300 * MenuScale, "Crouch")
-				InputBox(x + 450 * MenuScale, y + 300 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_CROUCH,210)),10)
+				InputBox(x + 450 * MenuScale, y + 300 * MenuScale,100,20,KeyName(Min(KEY_CROUCH,210)),10)
 				
 				For i = 0 To 227
 					If KeyHit(i) Then key = i : Exit
@@ -557,7 +929,6 @@ Function UpdateLauncher()
 	DebugLog LauncherWidth + ", " + LauncherHeight
 	
 	MenuScale = 1
-	
 	Graphics3D(LauncherWidth, LauncherHeight, 0, 2)
 	InitExt
 	
@@ -897,24 +1268,13 @@ Function DrawLoading(percent%, shortloading=False)
 			SetFont Font1
 			RowText(strtemp, GraphicWidth / 2-200, GraphicHeight / 2 +120,400,300,True)		
 		Else
-			
-			Color 0,0,0
-			SetFont Font2
-			Text(GraphicWidth / 2 + 1, GraphicHeight / 2 + 80 + 1, SelectedLoadingScreen\title, True, True)
-			SetFont Font1
-			RowText(SelectedLoadingScreen\txt[LoadingScreenText], GraphicWidth / 2-200+1, GraphicHeight / 2 +120+1,400,300,True)
-			
-			Color 255,255,255
 			SetFont Font2
 			Text(GraphicWidth / 2, GraphicHeight / 2 +80, SelectedLoadingScreen\title, True, True)
-			SetFont Font1
-			RowText(SelectedLoadingScreen\txt[LoadingScreenText], GraphicWidth / 2-200, GraphicHeight / 2 +120,400,300,True)
 			
+			SetFont Font1
+			RowText(SelectedLoadingScreen\txt[LoadingScreenText], GraphicWidth / 2-200, GraphicHeight / 2 +120,400,300,True)		
 		EndIf
 		
-		Color 0,0,0
-		Text(GraphicWidth / 2 + 1, GraphicHeight / 2 - 100 + 1, "LOADING - " + percent + " %", True, True)
-		Color 255,255,255
 		Text(GraphicWidth / 2, GraphicHeight / 2 - 100, "LOADING - " + percent + " %", True, True)
 		;If DrawCwm Then DrawImage CwmImg, GraphicWidth - 380, GraphicHeight - 525
 		
@@ -927,9 +1287,17 @@ Function DrawLoading(percent%, shortloading=False)
 			DrawImage(BlinkMeterIMG, x + 3 + 10 * (i - 1), y + 3)
 		Next
 		
+		
+		If percent = 99 Then 
+			Text(GraphicWidth / 2, GraphicHeight / 2 + 100, "Waiting for players...", True, False)
+		EndIf
+
 		If percent = 100 Then 
 			If firstloop Then PlaySound HorrorSFX(8)
 			Text(GraphicWidth / 2, GraphicHeight - 50, "PRESS ANY KEY", True, True)
+			If mpState<>0 Then
+				Exit
+			EndIf
 		Else
 			FlushKeys()
 			FlushMouse()
@@ -1024,25 +1392,19 @@ Function DrawTick%(x%, y%, selected%, locked% = False)
 	Color (255, 255, 255)
 	Rect(x, y, width, height)
 	
-	Local Highlight% = MouseOn(x, y, width, height) And (Not locked)
-	
-	If Highlight Then
-		Color(50, 50, 50)
-		If MouseHit1 Then selected = (Not selected) : PlaySound (ButtonSFX)
+	If MouseOn(x, y, width, height) And (Not locked) Then
+		Color(30, 30, 30)
+		If MouseHit1 Then selected = (Not selected)
 	Else
 		Color(0, 0, 0)		
 	End If
 	
-	Rect(x + 2, y + 2, width - 4, height - 4)
+	Rect(x + 2 * MenuScale, y + 2 * MenuScale, width - 4 * MenuScale, height - 4 * MenuScale)
 	
 	If selected Then
-		If Highlight Then
-			Color 255,255,255
-		Else
-			Color 200,200,200
-		EndIf
+		Color 255, 255, 255
 		
-		Rect(x + 4, y + 4, width - 8, height - 8)
+		Rect(x + width/2-2, y + height/2-2, 4, 4)
 	EndIf
 	
 	Color 255, 255, 255
@@ -1067,7 +1429,22 @@ Function SlideBar#(x%, y%, width%, value#)
 	
 End Function
 
-
+Function SlideBarVertical#(x%, y%, height%, value#)
+	
+	If MouseDown1 Then
+		If MouseY() >= y And MouseY() <= y + width + 14 And MouseX() >= x And MouseX() <= x + 20 Then
+			value = Min(Max((MouseY() - y) * 100 / width, 0), 100)
+		EndIf
+	EndIf
+	
+	Color 255,255,255
+	Rect(x, y, 20, height + 14, False)
+	
+	DrawImage(BlinkMeterIMG, x+3, y + height * value / 100.0 +3)
+	
+	Return value
+	
+End Function
 
 
 Function RowText(A$, X, Y, W, H, align% = 0, Leading = 0)
@@ -1286,5 +1663,4 @@ End Function
 
 
 ;~IDEal Editor Parameters:
-;~F#22B#2CD#2DF#2E9#3B3#3C6#3E0#3E9#3FC#41C#430#45E#474#4B6
 ;~C#Blitz3D
