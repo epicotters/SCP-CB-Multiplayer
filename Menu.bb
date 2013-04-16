@@ -39,66 +39,12 @@ Global SavePath$ = "Saves\"
 ;nykyisen tallennuksen nimi ja samalla missä kansiossa tallennustiedosto sijaitsee saves-kansiossa
 Global CurrSave$
 
-Type Client ;Mp mod
-	Field stream
-	Field name$
-	Field ready%
-	
-	Field Obj
-	Field Collider
-	
-	Field Crouch
-	
-	Field x#,y#,z#,yaw#
-	Field lx#,ly#,lz#,lyaw#
-	Field ft%,lft%
-	
-	Field currspeedT#,dir%
-End Type
-
-Global CurrPort$ = "25550" ;Mp mod
-Global CurrIp$ = "127.0.0.1"
-Global CurrName$ = "Player"
-Global MpMyID% = 0
-
-Global MpConn ;Mp mod
-Global MpStream
-Global MpNumClients
-Dim MpClients.Client(MpMaxClients)
-
 Global SaveGameAmount%
-
-myDir=ReadDir(SavePath) 
-Repeat 
-	file$=NextFile$(myDir) 
-	If file$="" Then Exit 
-	If FileType(folder$+"\"+file$) = 2 Then 
-		SaveGameAmount=SaveGameAmount+1
-	End If 
-Forever 
-CloseDir myDir 
-
 Dim SaveGames$(SaveGameAmount+1) 
+Dim SaveGameTime$(SaveGameAmount + 1)
+Dim SaveGameDate$(SaveGameAmount + 1)
 
-myDir=ReadDir(SavePath) 
-i = 0
-Repeat 
-	file$=NextFile$(myDir) 
-	If file$="" Then Exit 
-	If FileType(folder$+"\"+file$) = 2 Then 
-		SaveGames(i) = file
-		i=i+1
-	End If 
-Forever 
-CloseDir myDir 
-
-Dim SaveGameTime%(SaveGameAmount + 1)
-Dim SaveGameDate%(SaveGamesamount + 1)
-For i = 1 To SaveGamesamount
-	Local f% = ReadFile(SavePath + SaveGames(i - 1) + "\save.txt")
-	SaveGameTime(i - 1) = ReadInt(f)
-	CloseFile f
-Next
+LoadSaveGames()
 
 
 Dim KeyName$(211)
@@ -243,7 +189,7 @@ Function UpdateMainMenu()
 	EndIf
 	
 	If MainMenuTab = 0 Then
-		For i% = 0 To 4
+		For i% = 0 To 3
 			temp = False
 			x = 159 * MenuScale
 			y = (286 + 100 * i) * MenuScale
@@ -266,7 +212,7 @@ Function UpdateMainMenu()
 					txt = "NEW GAME"
 					RandomSeed = ""
 					If temp Then 
-						If Rand(10)=1 Then 
+						If Rand(15)=1 Then 
 							Select Rand(10)
 								Case 1 
 									RandomSeed = "NIL"
@@ -315,7 +261,7 @@ Function UpdateMainMenu()
 				Case 3
 					txt = "OPTIONS"
 					If temp Then MainMenuTab = 3
-				Case 4
+				Case 3
 					txt = "QUIT"
 					If temp Then
 						;DeInitExt
@@ -386,8 +332,6 @@ Function UpdateMainMenu()
 			EndIf
 		EndIf
 		
-		
-		
 		Select MainMenuTab
 			Case 1 ; New game
 				
@@ -442,9 +386,6 @@ Function UpdateMainMenu()
 						If RandomSeed = "" Then
 							RandomSeed = Abs(MilliSecs())
 						EndIf
-						
-						mpState = 0
-						
 						Local strtemp$ = ""
 						For i = 1 To Len(RandomSeed)
 							strtemp = strtemp+Asc(Mid(strtemp,i,1))
@@ -499,16 +440,18 @@ Function UpdateMainMenu()
 				Else
 					x = x + 20 * MenuScale
 					y = y + 20 * MenuScale
-					For  i% = 1 To SaveGameAmount
+					For i% = 1 To SaveGameAmount
 						Rect(x, y, (580 - 40)* MenuScale, 70* MenuScale)
 						Color(0, 0, 0)
 						Rect(x + 2 * MenuScale, y + 2 * MenuScale, (580 - 40 - 4) * MenuScale, (70 - 4) * MenuScale)
 						Color(255, 255, 255)	
 						;rect(x, y, 180, 80)	
 						Text(x + 20 * MenuScale, y + 10 * MenuScale, SaveGames(i - 1))
+						Text(x + 20 * MenuScale, y + (10+23) * MenuScale, SaveGameTime(i - 1))
+						Text(x + 120 * MenuScale, y + (10+23) * MenuScale, SaveGameDate(i - 1))
 						;text(x + 20, y + 30, ("Playing time: " + SaveGameTime[i - 1]))
 						
-						If DrawButton(x + 200 * MenuScale, y + 20 * MenuScale, 100 * MenuScale, 30 * MenuScale, "Load", False) Then
+						If DrawButton(x + 280 * MenuScale, y + 20 * MenuScale, 100 * MenuScale, 30 * MenuScale, "Load", False) Then
 							LoadEntities()
 							LoadGame(SavePath + SaveGames(i - 1) + "\")
 							CurrSave = SaveGames(i - 1)
@@ -516,7 +459,7 @@ Function UpdateMainMenu()
 							MainMenuOpen = False
 						EndIf
 						
-						If DrawButton(x + 320 * MenuScale, y + 20 * MenuScale, 100 * MenuScale, 30 * MenuScale, "Delete", False) Then
+						If DrawButton(x + 400 * MenuScale, y + 20 * MenuScale, 100 * MenuScale, 30 * MenuScale, "Delete", False) Then
 							DeleteFile(CurrentDir()+SavePath + SaveGames(i - 1)+"\save.txt")
 							DeleteDir(CurrentDir()+SavePath + SaveGames(i - 1))
 							DebugLog CurrentDir()+SavePath + SaveGames(i - 1)
@@ -568,7 +511,7 @@ Function UpdateMainMenu()
 				CurrPort = InputBox(x + 75 * MenuScale, y + 70 * MenuScale, 200 * MenuScale, 30 * MenuScale, CurrPort, 2)
 				
 				Text(x + 20 * MenuScale, y + 130 * MenuScale, "IP:")
-				CurrIP = InputBox(x + 75 * MenuScale, y + 120 * MenuScale, 200 * MenuScale, 30 * MenuScale, CurrIP, 3)
+				CurrIp = InputBox(x + 75 * MenuScale, y + 120 * MenuScale, 200 * MenuScale, 30 * MenuScale, CurrIp, 3)
 				
 				If DrawButton(x + 320 * MenuScale,  y + 70 * MenuScale, 130 * MenuScale, 30 * MenuScale, "Host", False) Then
 					MpConn=CreateTCPServer(CurrPort)
@@ -580,7 +523,7 @@ Function UpdateMainMenu()
 					MpClients(0)\name = CurrName
 					DebugLog "Hosting"
 				EndIf
-
+				
 				If DrawButton(x + 320 * MenuScale,  y + 120 * MenuScale, 130 * MenuScale, 30 * MenuScale, "Connect", False) Then
 					MpStream=OpenTCPStream(CurrIp,CurrPort)
 					If Not MpStream Then
@@ -626,7 +569,7 @@ Function UpdateMainMenu()
 						EndIf
 					EndIf
 				EndIf
-	
+				
 			Case 5 ;MP mod
 				
 				y = y + height + 20 * MenuScale
@@ -713,18 +656,18 @@ Function UpdateMainMenu()
 							If i% = 1 Then
 								MpClients(i%)\Obj = LoadAnimMesh("GFX\npcs\classd.b3d");
 							Else
-								MpClients(i%)\Obj = CopyEntity (MpClients(1)\obj)
+								MpClients(i%)\Obj = CopyEntity (MpClients(1)\Obj)
 							EndIf
-							tempS# = 0.5 / MeshWidth(MpClients(i%)\obj)
-							ScaleEntity MpClients(i%)\obj, tempS, tempS, tempS
-									
+							tempS# = 0.5 / MeshWidth(MpClients(i%)\Obj)
+							ScaleEntity MpClients(i%)\Obj, tempS, tempS, tempS
+							
 							MpClients(i%)\Collider = CreatePivot()
 							EntityRadius MpClients(i%)\Collider, 0.32
 							EntityType MpClients(i%)\Collider, HIT_PLAYER
 						Next
-					
+						
 						DebugLog "starting..."
-					
+						
 						LoadEntities()
 						InitNewGame()
 						MainMenuOpen = False
@@ -783,10 +726,10 @@ Function UpdateMainMenu()
 										If i% = 0 Then
 											MpClients(i%)\Obj = LoadAnimMesh("GFX\npcs\classd.b3d");
 										Else
-											MpClients(i%)\Obj = CopyEntity (MpClients(0)\obj)
+											MpClients(i%)\Obj = CopyEntity (MpClients(0)\Obj)
 										EndIf
-										tempS# = 0.5 / MeshWidth(MpClients(i%)\obj)
-										ScaleEntity MpClients(i%)\obj, tempS, tempS, tempS
+										tempS# = 0.5 / MeshWidth(MpClients(i%)\Obj)
+										ScaleEntity MpClients(i%)\Obj, tempS, tempS, tempS
 										
 										MpClients(i%)\Collider = CreatePivot()
 										EntityRadius MpClients(i%)\Collider, 0.32
@@ -815,7 +758,7 @@ Function UpdateMainMenu()
 				
 				For i% = 0 To MpNumClients-1
 					Text(x + 20 * MenuScale, y + 30 * MenuScale + i% * 30 * MenuScale, MpClients(i%)\name)
-				Next
+				Next	
 				
 			Case 3
 				
@@ -871,23 +814,23 @@ Function UpdateMainMenu()
 				
 				Text (x + 20 * MenuScale, y + 220 * MenuScale, "Control configuration:")	
 				
-				Text (x + 20 * MenuScale, y + 240 * MenuScale, "Right")
-				InputBox(x + 170 * MenuScale, y + 240 * MenuScale,100,20,KeyName(Min(KEY_RIGHT,210)),4)				
+				Text (x + 20 * MenuScale, y + 240 * MenuScale, "Up")
+				InputBox(x + 170 * MenuScale, y + 240 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_UP,210)),5)		
 				Text (x + 20 * MenuScale, y + 260 * MenuScale, "Left")
-				InputBox(x + 170 * MenuScale, y + 260 * MenuScale,100,20,KeyName(Min(KEY_LEFT,210)),3)
-				Text (x + 20 * MenuScale, y + 280 * MenuScale, "Up")
-				InputBox(x + 170 * MenuScale, y + 280 * MenuScale,100,20,KeyName(Min(KEY_UP,210)),5)
-				Text (x + 20 * MenuScale, y + 300 * MenuScale, "Down")
-				InputBox(x + 170 * MenuScale, y + 300 * MenuScale,100,20,KeyName(Min(KEY_DOWN,210)),6)
+				InputBox(x + 170 * MenuScale, y + 260 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_LEFT,210)),3)	
+				Text (x + 20 * MenuScale, y + 280 * MenuScale, "Down")
+				InputBox(x + 170 * MenuScale, y + 280 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_DOWN,210)),6)				
+				Text (x + 20 * MenuScale, y + 300 * MenuScale, "Right")
+				InputBox(x + 170 * MenuScale, y + 300 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_RIGHT,210)),4)	
 				
 				Text (x + 300 * MenuScale, y + 240 * MenuScale, "Blink")
-				InputBox(x + 450 * MenuScale, y + 240 * MenuScale,100,20,KeyName(Min(KEY_BLINK,210)),7)				
+				InputBox(x + 450 * MenuScale, y + 240 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_BLINK,210)),7)				
 				Text (x + 300 * MenuScale, y + 260 * MenuScale, "Sprint")
-				InputBox(x + 450 * MenuScale, y + 260 * MenuScale,100,20,KeyName(Min(KEY_SPRINT,210)),8)
+				InputBox(x + 450 * MenuScale, y + 260 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_SPRINT,210)),8)
 				Text (x + 300 * MenuScale, y + 280 * MenuScale, "Inventory")
-				InputBox(x + 450 * MenuScale, y + 280 * MenuScale,100,20,KeyName(Min(KEY_INV,210)),9)
+				InputBox(x + 450 * MenuScale, y + 280 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_INV,210)),9)
 				Text (x + 300 * MenuScale, y + 300 * MenuScale, "Crouch")
-				InputBox(x + 450 * MenuScale, y + 300 * MenuScale,100,20,KeyName(Min(KEY_CROUCH,210)),10)
+				InputBox(x + 450 * MenuScale, y + 300 * MenuScale,100*MenuScale,20*MenuScale,KeyName(Min(KEY_CROUCH,210)),10)
 				
 				For i = 0 To 227
 					If KeyHit(i) Then key = i : Exit
@@ -929,6 +872,7 @@ Function UpdateLauncher()
 	DebugLog LauncherWidth + ", " + LauncherHeight
 	
 	MenuScale = 1
+	
 	Graphics3D(LauncherWidth, LauncherHeight, 0, 2)
 	InitExt
 	
@@ -1268,13 +1212,24 @@ Function DrawLoading(percent%, shortloading=False)
 			SetFont Font1
 			RowText(strtemp, GraphicWidth / 2-200, GraphicHeight / 2 +120,400,300,True)		
 		Else
+			
+			Color 0,0,0
+			SetFont Font2
+			Text(GraphicWidth / 2 + 1, GraphicHeight / 2 + 80 + 1, SelectedLoadingScreen\title, True, True)
+			SetFont Font1
+			RowText(SelectedLoadingScreen\txt[LoadingScreenText], GraphicWidth / 2-200+1, GraphicHeight / 2 +120+1,400,300,True)
+			
+			Color 255,255,255
 			SetFont Font2
 			Text(GraphicWidth / 2, GraphicHeight / 2 +80, SelectedLoadingScreen\title, True, True)
-			
 			SetFont Font1
-			RowText(SelectedLoadingScreen\txt[LoadingScreenText], GraphicWidth / 2-200, GraphicHeight / 2 +120,400,300,True)		
+			RowText(SelectedLoadingScreen\txt[LoadingScreenText], GraphicWidth / 2-200, GraphicHeight / 2 +120,400,300,True)
+			
 		EndIf
 		
+		Color 0,0,0
+		Text(GraphicWidth / 2 + 1, GraphicHeight / 2 - 100 + 1, "LOADING - " + percent + " %", True, True)
+		Color 255,255,255
 		Text(GraphicWidth / 2, GraphicHeight / 2 - 100, "LOADING - " + percent + " %", True, True)
 		;If DrawCwm Then DrawImage CwmImg, GraphicWidth - 380, GraphicHeight - 525
 		
@@ -1287,17 +1242,13 @@ Function DrawLoading(percent%, shortloading=False)
 			DrawImage(BlinkMeterIMG, x + 3 + 10 * (i - 1), y + 3)
 		Next
 		
-		
 		If percent = 99 Then 
 			Text(GraphicWidth / 2, GraphicHeight / 2 + 100, "Waiting for players...", True, False)
 		EndIf
-
+		
 		If percent = 100 Then 
 			If firstloop Then PlaySound HorrorSFX(8)
 			Text(GraphicWidth / 2, GraphicHeight - 50, "PRESS ANY KEY", True, True)
-			If mpState<>0 Then
-				Exit
-			EndIf
 		Else
 			FlushKeys()
 			FlushMouse()
@@ -1392,19 +1343,25 @@ Function DrawTick%(x%, y%, selected%, locked% = False)
 	Color (255, 255, 255)
 	Rect(x, y, width, height)
 	
-	If MouseOn(x, y, width, height) And (Not locked) Then
-		Color(30, 30, 30)
-		If MouseHit1 Then selected = (Not selected)
+	Local Highlight% = MouseOn(x, y, width, height) And (Not locked)
+	
+	If Highlight Then
+		Color(50, 50, 50)
+		If MouseHit1 Then selected = (Not selected) : PlaySound (ButtonSFX)
 	Else
 		Color(0, 0, 0)		
 	End If
 	
-	Rect(x + 2 * MenuScale, y + 2 * MenuScale, width - 4 * MenuScale, height - 4 * MenuScale)
+	Rect(x + 2, y + 2, width - 4, height - 4)
 	
 	If selected Then
-		Color 255, 255, 255
+		If Highlight Then
+			Color 255,255,255
+		Else
+			Color 200,200,200
+		EndIf
 		
-		Rect(x + width/2-2, y + height/2-2, 4, 4)
+		Rect(x + 4, y + 4, width - 8, height - 8)
 	EndIf
 	
 	Color 255, 255, 255
@@ -1429,22 +1386,7 @@ Function SlideBar#(x%, y%, width%, value#)
 	
 End Function
 
-Function SlideBarVertical#(x%, y%, height%, value#)
-	
-	If MouseDown1 Then
-		If MouseY() >= y And MouseY() <= y + width + 14 And MouseX() >= x And MouseX() <= x + 20 Then
-			value = Min(Max((MouseY() - y) * 100 / width, 0), 100)
-		EndIf
-	EndIf
-	
-	Color 255,255,255
-	Rect(x, y, 20, height + 14, False)
-	
-	DrawImage(BlinkMeterIMG, x+3, y + height * value / 100.0 +3)
-	
-	Return value
-	
-End Function
+
 
 
 Function RowText(A$, X, Y, W, H, align% = 0, Leading = 0)
@@ -1663,4 +1605,5 @@ End Function
 
 
 ;~IDEal Editor Parameters:
+;~F#366#408#41A#424#4F2#505#51F#528#53B#55B#56F#59D#5B3#5F5
 ;~C#Blitz3D
