@@ -4611,7 +4611,7 @@ Function UpdateNetworkEvents()
 						EndIf
 					EndIf
 				Case "room3pit";TODO, not sure about camera mechanics; event not that important
-					If cleint\room = e\room Then
+					If client\room = e\room Then
 						If e\room\Objects[2] = 0 Then
 							e\room\Objects[2] =	LoadMesh("GFX\npcs\duck_low_res.b3d")
 							ScaleEntity(e\room\Objects[2], 0.07, 0.07, 0.07)
