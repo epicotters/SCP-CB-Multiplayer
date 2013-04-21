@@ -1465,14 +1465,14 @@ Function UpdateNetworkEvents()
 	Local angle#
 	
 	;PlayerRoom = Null
-	For client.Client = Each Client
+	For i% = 0 To MpNumClients - 1
 		For r.Rooms = Each Rooms
-			If Abs(EntityX(client\Collider) - EntityX(r\obj)) < 12.0 Then 
-				If Abs(EntityZ(client\Collider) - EntityZ(r\obj)) < 12.0 Then
+			If Abs(EntityX(MpClients(i%)\Collider) - EntityX(r\obj)) < 12.0 Then 
+				If Abs(EntityZ(MpClients(i%)\Collider) - EntityZ(r\obj)) < 12.0 Then
 					;MapFound(PlayerLevel, Floor(EntityX(r\obj) / 8.0), Floor(EntityZ(r\obj) / 8.0)) = Max(MapFound(PlayerLevel, Floor(EntityX(r\obj) / 8.0), Floor(EntityZ(r\obj) / 8.0)), 1)
-					If Abs(EntityX(client\Collider) - EntityX(r\obj)) < 4.0 Then
-						If Abs(EntityZ(client\Collider) - EntityZ(r\obj)) < 4.0 Then
-							If Abs(EntityY(client\Collider) - EntityY(r\obj)) < 1.5 Then client\room = r
+					If Abs(EntityX(MpClients(i%)\Collider) - EntityX(r\obj)) < 4.0 Then
+						If Abs(EntityZ(MpClients(i%)\Collider) - EntityZ(r\obj)) < 4.0 Then
+							If Abs(EntityY(MpClients(i%)\Collider) - EntityY(r\obj)) < 1.5 Then MpClients(i%)\room = r
 							;MapFound(PlayerLevel, Floor(EntityX(r\obj) / 8.0), Floor(EntityZ(r\obj) / 8.0)) = 2
 					EndIf
 				EndIf
@@ -1483,11 +1483,11 @@ Function UpdateNetworkEvents()
 	
 	
 	For i = 0 To 3
-		If PlayerRoom\SoundEmitter[i]<>0 Then 
-			dist# = EntityDistance(PlayerRoom\SoundEmitterObj[i],Collider)
-			If dist < PlayerRoom\SoundEmitterRange[i] Then
+		If MpClients(MpMyID)\room\SoundEmitter[i]<>0 Then 
+			dist# = EntityDistance(MpClients(MpMyID)\room\SoundEmitterObj[i],Collider)
+			If dist < MpClients(MpMyID)\room\SoundEmitterRange[i] Then
 				DebugLog dist
-				PlayerRoom\SoundEmitterCHN[i] = LoopSound2(RoomAmbience[PlayerRoom\SoundEmitter[i]],PlayerRoom\SoundEmitterCHN[i], Camera, PlayerRoom\SoundEmitterObj[i],PlayerRoom\SoundEmitterRange[i],1.5)
+				MpClients(MpMyID)\room\SoundEmitterCHN[i] = LoopSound2(RoomAmbience[MpClients(MpMyID)\room\SoundEmitter[i]],MpClients(MpMyID)\room\SoundEmitterCHN[i], Camera, MpClients(MpMyID)\room\SoundEmitterObj[i],MpClients(MpMyID)\room\SoundEmitterRange[i],1.5)
 			EndIf
 		EndIf
 	Next
@@ -1515,7 +1515,7 @@ Function UpdateNetworkEvents()
 			Select e\EventName
 				Case "alarm" ;the alarm in the starting room. Ready for pre-beta testing
 					If e\EventState = 0 Then
-						If PlayerRoom = e\room Then
+						If MpClients(MpMyID)\room = e\room Then
 							ShowEntity Fog
 							AmbientLight Brightness, Brightness, Brightness
 							CameraFogRange(Camera, CameraFogNear, CameraFogFar)
@@ -2757,7 +2757,7 @@ Function UpdateNetworkEvents()
 							e\EventState = 1
 						EndIf
 						
-						If PlayerRoom = e\room
+						If MpClients(MpMyID)\room = e\room
 							ShouldPlay = 4
 						EndIf
 						If RemoteDoorOn Then 
@@ -3234,7 +3234,7 @@ Function UpdateNetworkEvents()
 								If Distance(EntityX(client\Collider),EntityZ(client\Collider),EntityX(e\room\Objects[i],True),EntityZ(e\room\Objects[i],True)) < 300.0*RoomScale Then
 									;soitetaan laukaisuääni
 									If KillTimer => 0 Then
-										If PlayerRoom = e\room
+										If MpClients(MpMyID)\room = e\room
 											PlayerSoundVolume = Max(8.0,PlayerSoundVolume)
 										EndIf
 										StopChannel(e\SoundCHN)
@@ -3279,7 +3279,7 @@ Function UpdateNetworkEvents()
 									If Curr106\State < -10 Then
 										For i = 0 To 2
 											If Distance(EntityX(Curr106\Collider),EntityZ(Curr106\Collider),EntityX(e\room\Objects[i],True),EntityZ(e\room\Objects[i],True)) < 250.0*RoomScale Then
-												If PlayerRoom = e\room
+												If MpClients(MpMyID)\room = e\room
 													ShowEntity Light
 													LightFlash = 0.3
 												EndIf
@@ -4010,7 +4010,7 @@ Function UpdateNetworkEvents()
 					EndIf
 					
 					If e\EventState = 1 Then
-						If PlayerRoom = e\room Then
+						If MpClients(MpMyID)\room = e\room Then
 							If ShouldPlay = 0 Then ShouldPlay = 66
 						Else
 							If ShouldPlay = 66 Then ShouldPlay = 0
@@ -4066,6 +4066,8 @@ Function UpdateNetworkEvents()
 								Curr106\State = -11
 								Animate2(Curr106\obj, AnimTime(Curr106\obj), 55, 104, 0.1)
 								Curr106\Idle = True
+								e\timerreg = True
+							EndIf
 								
 								If e\EventState > 180 Then
 									Curr106\Idle = False
@@ -4073,8 +4075,8 @@ Function UpdateNetworkEvents()
 									
 									Delete e
 								EndIf
-								e\timerreg = True
-							EndIf
+								
+							
 							
 							
 						EndIf
@@ -9097,13 +9099,19 @@ Repeat
 			UpdateRoomTimer = 15
 		EndIf
 		
+		If ((Not MenuOpen) And (Not InvOpen) And (SelectedDoor = Null) And (ConsoleOpen = False))
+			MouseLook()
+		EndIf
+		
 		If (((Not MenuOpen) And (Not InvOpen) And (SelectedDoor = Null) And (ConsoleOpen = False)) Or mpState <> 0) Then	
 			AmbientLight Brightness, Brightness, Brightness	
 			PlayerSoundVolume = CurveValue(0.0, PlayerSoundVolume, 5.0)
 			
 			UpdateEmitters()
-			MouseLook()
+			;MouseLook()
 			MovePlayer()
+			UpdatePlayers()
+			
 			If mpState <> 0 Then
 				UpdateNetworkEvents()
 			Else
@@ -9117,7 +9125,7 @@ Repeat
 			EndIf
 			UpdateDoors()
 			UpdateNetwork()
-			UpdatePlayers()
+			
 			UpdateDecals()
 			UpdateItems()
 			UpdateParticles()
@@ -10011,6 +10019,7 @@ Function MovePlayer(loaded = True)
 	If mpState <> 0 Then
 		MpSendPosition = MpSendPosition - 1
 	EndIf
+	MpClients(MpMyID)\Collider = Collider
 	
 	
 End Function
@@ -10401,9 +10410,9 @@ Function DrawGUI()
 			Text x - 50, 70, "Camera Position: (" + f2s(EntityX(Camera), 3)+ ", " + f2s(EntityY(Camera), 3) +", " + f2s(EntityZ(Camera), 3) + ")"
 			Text x - 50, 100, "Player Rotation: (" + f2s(EntityPitch(Collider), 3) + ", " + f2s(EntityYaw(Collider), 3) + ", " + f2s(EntityRoll(Collider), 3) + ")"
 			Text x - 50, 120, "Camera Rotation: (" + f2s(EntityPitch(Camera), 3)+ ", " + f2s(EntityYaw(Camera), 3) +", " + f2s(EntityRoll(Camera), 3) + ")"
-			Text x - 50, 150, "Room: " + PlayerRoom\RoomTemplate\Name
+			Text x - 50, 150, "Room: " + MpClients(MpMyID)\room\RoomTemplate\Name
 			For ev.Events = Each Events
-				If ev\room = PlayerRoom Then
+				If ev\room = MpClients(MpMyID)\room Then
 					Text x - 50, 170, "Room event: " + ev\EventName   
 					Text x - 50, 190, "state: " + ev\EventState
 					Text x - 50, 210, "state2: " + ev\EventState2   
@@ -11691,6 +11700,9 @@ Function LoadEntities()
 	EntityRadius Collider, 0.15, 0.30
 	EntityPickMode(Collider, 1)
 	EntityType Collider, HIT_PLAYER
+	If mpState <> 0
+		MpClients(MpMyID)\Collider = Collider
+	EndIf
 	
 	Head = CreatePivot()
 	EntityRadius Head, 0.15
@@ -13735,7 +13747,7 @@ End Function
 
 
 ;~IDEal Editor Parameters:
-;~F#F#D2#D6#265#334#350#3C3#3D0#468#4F6#517#54B#146F#2558#256B#2D52#2D5D#2FBD#2FD6#2FF2
-;~F#300A#3025#3042#305B#3278#328E#32C0#3352#338B#33A0#3407#340B#3413#341A#3425#3429#3464#346C#3476#3485
-;~F#34A3#34D2#34E7#34F2#34F6#3549#3557#355F#356B#3574#359A#359F#35A4
+;~F#D2#D6#334#350#3C3#4F6#517#2560#2573#2D5B#2FC9#2FE2#2FFE#3016#3031#304E#3067#3284#329A#32CC
+;~F#335E#3397#33AC#3413#3417#341F#3426#3431#3435#3470#3478#3482#3491#34AF#34DE#34F3#34FE#3502#3555#3563
+;~F#356B#3577#3580#35A6#35AB#35B0
 ;~C#Blitz3D

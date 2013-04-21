@@ -736,6 +736,7 @@ Function UpdateMainMenu()
 										EntityType MpClients(i%)\Collider, HIT_PLAYER
 									EndIf
 								Next
+								DebugLog(Mpnumclients)
 								
 								LoadEntities()
 								InitNewGame()
@@ -1605,5 +1606,5 @@ End Function
 
 
 ;~IDEal Editor Parameters:
-;~F#366#408#41A#424#4F2#505#51F#528#53B#55B#56F#59D#5B3#5F5
+;~F#367#409#41B#425#4F3#506#520#529#53C#55C#570#59E#5B4#5F6
 ;~C#Blitz3D
