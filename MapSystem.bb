@@ -2183,11 +2183,11 @@ Function FillRoom(r.Rooms)
 	Next
 	
 	For i = 0 To 3
-		If r\RoomTemplate\tempsoundemitter[i]<>0 Then
+		If r\RoomTemplate\TempSoundEmitter[i]<>0 Then
 			r\SoundEmitterObj[i]=CreatePivot(r\obj)
-			PositionEntity r\SoundEmitterObj[i], r\x+r\RoomTemplate\tempsoundemitterx[i],r\y+r\RoomTemplate\tempsoundemittery[i],r\z+r\RoomTemplate\tempsoundemitterz[i],True
-			r\SoundEmitter[i] = r\RoomTemplate\tempSoundEmitter[i]
-			r\SoundEmitterRange[i] = r\RoomTemplate\tempSoundEmitterrange[i]
+			PositionEntity r\SoundEmitterObj[i], r\x+r\RoomTemplate\TempSoundEmitterX[i],r\y+r\RoomTemplate\TempSoundEmitterY[i],r\z+r\RoomTemplate\TempSoundEmitterZ[i],True
+			r\SoundEmitter[i] = r\RoomTemplate\TempSoundEmitter[i]
+			r\SoundEmitterRange[i] = r\RoomTemplate\TempSoundEmitterRange[i]
 			
 			;DebugLog r\RoomTemplate\Name+" - "+EntityX(r\RoomTemplate\tempsoundemitterobj[i],True)+", "+EntityY(r\RoomTemplate\tempsoundemitterobj[i],True)+", "+EntityZ(r\RoomTemplate\tempsoundemitterobj[i],True)
 		EndIf
@@ -3161,6 +3161,6 @@ End Function
 
 
 ;~IDEal Editor Parameters:
-;~F#2#9#26#FF#110#121#13C#150#15B#166#1A2#1B1#1F2#898#8C3#8DE#8E3#8F2#909#995
-;~F#A6E#A8B#A92#A98#AA6
+;~F#2#9#26#FF#110#121#150#166#1A2#1B1#1F2#898#8C3#8DE#8E3#8F2#909#995#A6E#A8B
+;~F#A92#A98#AA6
 ;~C#Blitz3D

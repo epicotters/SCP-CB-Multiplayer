@@ -333,6 +333,7 @@ Function UpdateConsole()
 						Case "offices", "office"
 							StrTemp = "room2offices"
 					End Select
+				
 					
 					For r.Rooms = Each Rooms
 						If r\RoomTemplate\Name = StrTemp Then
@@ -344,6 +345,19 @@ Function UpdateConsole()
 							Exit
 						EndIf
 					Next
+				Case "teleporte"
+					StrTemp$ = Lower(Right(ConsoleInput, Len(ConsoleInput) - Instr(ConsoleInput, " ")))
+					For ev.Events = Each Events 
+						If ev\EventName = StrTemp
+							PositionEntity (Collider, ev\room\x, ev\room\y, ev\room\z, True)
+							ResetEntity(Collider)
+							UpdateDoors()
+							UpdateRooms()
+							Exit
+						EndIf
+					Next
+					CreateConsoleMsg("EVENT NOT FOUND")
+							
 				Case "spawnitem"
 					StrTemp$ = Lower(Right(ConsoleInput, Len(ConsoleInput) - Instr(ConsoleInput, " ")))
 					temp = False 
@@ -1297,7 +1311,7 @@ Type Events
 	Field SoundCHN%, SoundCHN2%
 	Field Sound, Sound2
 	Field img%
-	Field timerreg%
+	Field timerreg%, timerreg2%
 End Type 
 	
 Function CreateEvent.Events(eventname$, roomname$, id%, prob# = 0.0)
@@ -1463,7 +1477,6 @@ Function UpdateNetworkEvents()
 	Local p.Particles, n.NPCs, r.Rooms, e.Events, e2.Events, it.Items, em.Emitters
 	
 	Local angle#
-	
 	;PlayerRoom = Null
 	For i% = 0 To MpNumClients - 1
 		For r.Rooms = Each Rooms
@@ -1472,10 +1485,12 @@ Function UpdateNetworkEvents()
 					;MapFound(PlayerLevel, Floor(EntityX(r\obj) / 8.0), Floor(EntityZ(r\obj) / 8.0)) = Max(MapFound(PlayerLevel, Floor(EntityX(r\obj) / 8.0), Floor(EntityZ(r\obj) / 8.0)), 1)
 					If Abs(EntityX(MpClients(i%)\Collider) - EntityX(r\obj)) < 4.0 Then
 						If Abs(EntityZ(MpClients(i%)\Collider) - EntityZ(r\obj)) < 4.0 Then
-							If Abs(EntityY(MpClients(i%)\Collider) - EntityY(r\obj)) < 1.5 Then MpClients(i%)\room = r
+							If Abs(EntityY(MpClients(i%)\Collider) - EntityY(r\obj)) < 1.5 Then
+								MpClients(i%)\room = r
+							EndIf
 							;MapFound(PlayerLevel, Floor(EntityX(r\obj) / 8.0), Floor(EntityZ(r\obj) / 8.0)) = 2
+						EndIf
 					EndIf
-				EndIf
 				EndIf
 			End If
 		Next
@@ -1494,6 +1509,7 @@ Function UpdateNetworkEvents()
 	
 	For e.Events = Each Events
 		e\timerreg = False
+		e\timerreg2 = False
 	Next
 	
 	;If PlayerRoom\RoomTemplate\ambience<>0 Then 
@@ -3217,7 +3233,7 @@ Function UpdateNetworkEvents()
 							PositionEntity e\room\Objects[3], EntityX(e\room\Objects[3],True), (-608.0*RoomScale)+0.05+Sin(e\EventState+270)*0.05, EntityZ(e\room\Objects[3],True), True
 						EndIf
 					EndIf
-				Case "room2tesla";Set additional time regulators
+				Case "room2tesla";Ready for pre-beta testing
 					temp = True
 					If e\EventState2 > 70*3.5 And e\EventState2 < 70*90 Then temp = False
 					
@@ -3260,7 +3276,10 @@ Function UpdateNetworkEvents()
 								Next						
 							EndIf
 						Else
-							e\EventState = e\EventState+FPSfactor
+							If e\timerreg = False
+								e\EventState = e\EventState+FPSfactor
+								e\timerreg = True
+							EndIf
 							If e\EventState > 40 Then
 								If e\EventState-FPSfactor =< 40 Then PlaySound(IntroSFX(11))	
 								If e\EventState < 70 Then 
@@ -3338,12 +3357,21 @@ Function UpdateNetworkEvents()
 								EndIf
 							Next
 							If temp = False Then e\EventState2=70*3.5
-							e\EventState3=e\EventState3+140
+							If e\timerreg2 = False
+								e\EventState3=e\EventState3+140
+								e\timerreg2 = True
+							EndIf
 						Else
-							e\EventState3=e\EventState3-FPSfactor
+							If e\timerreg2 = False
+								e\EventState3=e\EventState3-FPSfactor
+								e\timerreg2 = True
+							EndIf
 						EndIf
 					Else
-						e\EventState2 = Max(e\EventState2-FPSfactor,0)
+						If e\timerreg2 = False
+							e\EventState2 = Max(e\EventState2-FPSfactor,0)
+							e\timerreg2 = True
+						EndIf
 					EndIf
 				Case "pj";Ready for pre-beta testing, not sure if I should keep the sound global or not
 					If e\EventState = 0 Then
@@ -3415,13 +3443,13 @@ Function UpdateNetworkEvents()
 						e\EventState3 = UpdateElevators(e\EventState3, e\room\RoomDoors[2], e\room\RoomDoors[3],e\room\Objects[4],e\room\Objects[5], e)
 						e\timerreg = True
 					EndIf 
-				Case "room049";TODO
-					If PlayerRoom = e\room Then
+				Case "room049";Ready for pre-beta testing
+					If client\room = e\room Then
 						e\EventState2 = UpdateElevators(e\EventState2, e\room\RoomDoors[0], e\room\RoomDoors[1],e\room\Objects[0],e\room\Objects[1], e)
 						
 						e\EventState3 = UpdateElevators(e\EventState3, e\room\RoomDoors[2], e\room\RoomDoors[3],e\room\Objects[2],e\room\Objects[3], e)
 						
-						If EntityY(Collider) < -2848*RoomScale Then
+						If EntityY(client\Collider) < -2848*RoomScale Then
 							If e\EventState = 0 Then
 								n.NPCs = CreateNPC(NPCtypeZombie, EntityX(e\room\Objects[6],True),EntityY(e\room\Objects[6],True),EntityZ(e\room\Objects[6],True))
 								PointEntity n\Collider, e\room\obj
@@ -3431,12 +3459,17 @@ Function UpdateNetworkEvents()
 								TurnEntity n\Collider, 0, 20, 0
 								e\EventState=1
 							ElseIf e\EventState > 0
-								If e\EventState < 70*190 Then 
-									e\EventState = Min(e\EventState+FPSfactor,70*190)
+								If e\EventState < 70*190 Then
+									If e\timerreg = False
+										e\EventState = Min(e\EventState+FPSfactor,70*190)
+										e\timerreg = True
+									EndIf
 									;049 spawns after 3 minutes or when the player is close enough to the containment chamber
-									If e\EventState > 70*180 Or EntityDistance(Collider, e\room\Objects[8])<800*RoomScale Then
+									If e\EventState > 70*180 Or EntityDistance(client\Collider, e\room\Objects[8])<800*RoomScale Then
 										e\Sound = LoadSound("SFX\Horror13.ogg")
-										PlaySound(e\Sound)
+										If MpClients(MpMyID)\room = e\room
+											PlaySound(e\Sound)
+										EndIf
 										
 										For n.NPCs = Each NPCs ;awake the zombies
 											If n\NPCtype = NPCtypeZombie Then
@@ -3457,8 +3490,11 @@ Function UpdateNetworkEvents()
 											If n\NPCtype=NPCtype049 Then e\room\NPC[0]=n : Exit
 										Next
 									Else
-										If EntityDistance(e\room\NPC[0]\Collider,Collider)<4.0 Then
-											e\EventState=e\EventState+FPSfactor
+										If EntityDistance(e\room\NPC[0]\Collider,client\Collider)<4.0 Then
+											If e\timerreg = False
+												e\EventState=e\EventState+FPSfactor
+												e\timerreg = True
+											EndIf
 											If e\EventState > 70*195 And e\EventState-FPSfactor =< 70*195 Then
 												TempSound=LoadSound("SFX\049\049_"+Rand(1,2)+".ogg")
 												PlaySound2(TempSound,Camera, e\room\NPC[0]\Collider)
@@ -3477,25 +3513,34 @@ Function UpdateNetworkEvents()
 								
 								
 								If e\EventState > -70*4 Then 
-									If FallTimer => 0 Then 
-										FallTimer = Min(-1, FallTimer)
-										PositionEntity(Head, EntityX(Camera, True), EntityY(Camera, True), EntityZ(Camera, True), True)
-										ResetEntity (Head)
-										RotateEntity(Head, 0, EntityYaw(Camera) + Rand(-45, 45), 0)
+									If FallTimer => 0 Then
+										If MpClients(MpMyID)\room = e\room
+											FallTimer = Min(-1, FallTimer)
+											PositionEntity(Head, EntityX(Camera, True), EntityY(Camera, True), EntityZ(Camera, True), True)
+											ResetEntity (Head)
+											RotateEntity(Head, 0, EntityYaw(Camera) + Rand(-45, 45), 0)
+										EndIf
 									ElseIf FallTimer < -230
-										FallTimer = -231
-										BlinkTimer = 0
-										e\EventState = e\EventState-FPSfactor
+										If MpClients(MpMyID)\room = e\room
+											FallTimer = -231
+											BlinkTimer = 0
+										EndIf
+										If e\timerreg = False
+											e\EventState = e\EventState-FPSfactor
+											e\timerreg = True
+										EndIf
 										
 										If e\EventState =< -70*4 Then 
 											UpdateDoors()
 											UpdateRooms()
-											ShowEntity Collider
-											DropSpeed = 0
-											BlinkTimer = -10
-											FallTimer = 0
-											PositionEntity Collider, EntityX(e\room\obj,True), EntityY(e\room\Objects[6],True)+0.2, EntityZ(e\room\obj,True)
-											ResetEntity Collider										
+											If MpClients(MpMyID)\room = e\room
+												ShowEntity Collider
+												DropSpeed = 0
+												BlinkTimer = -10
+												FallTimer = 0
+												PositionEntity Collider, EntityX(e\room\obj,True), EntityY(e\room\Objects[6],True)+0.2, EntityZ(e\room\obj,True)
+												ResetEntity Collider		
+											EndIf
 											
 											PositionEntity e\room\NPC[0]\Collider, EntityX(e\room\Objects[0],True),EntityY(e\room\Objects[0],True),EntityZ(e\room\Objects[0],True),True
 											ResetEntity e\room\NPC[0]\Collider
@@ -3514,37 +3559,42 @@ Function UpdateNetworkEvents()
 											n\State3 = 70*145
 											e\room\NPC[1]=n
 											
-											PointEntity Collider, e\room\NPC[1]\Collider
+											If MpClients(MpMyID)\room = e\room
+												PointEntity Collider, e\room\NPC[1]\Collider
+												
 											
-											TempSound = LoadSound("SFX\049\MTF_1.ogg")
-											PlaySound TempSound
-											e\Sound = LoadSound("SFX\zombiebreath.ogg")
+												TempSound = LoadSound("SFX\049\MTF_1.ogg")
+												PlaySound TempSound
+												e\Sound = LoadSound("SFX\zombiebreath.ogg")
+											EndIf
 										EndIf
 									EndIf
 								Else
-									BlurTimer = 800
-									ForceMove = 0.5
-									Injuries = Max(2.0,Injuries)
-									Bloodloss = 0
-									MoveLock = True
-									PointEntity Collider, e\room\NPC[1]\Collider
-									If KillTimer < 0 Then
-										If ChannelPlaying(e\room\NPC[1]\SoundChn) Then StopChannel(e\room\NPC[1]\SoundChn)
-										TempSound = LoadSound("SFX\049\MTF_2.ogg")
-										PlaySound TempSound
-										Delete e
-									Else
-										If e\SoundCHN = 0 Then
-											e\SoundCHN = PlaySound (e\Sound)
+									If MpClients(MpMyID)\room = e\room
+										BlurTimer = 800
+										ForceMove = 0.5
+										Injuries = Max(2.0,Injuries)
+										Bloodloss = 0
+										MoveLock = True
+										PointEntity Collider, e\room\NPC[1]\Collider
+										If KillTimer < 0 Then
+											If ChannelPlaying(e\room\NPC[1]\SoundChn) Then StopChannel(e\room\NPC[1]\SoundChn)
+											TempSound = LoadSound("SFX\049\MTF_2.ogg")
+											PlaySound TempSound
+											Delete e
 										Else
-											If (Not ChannelPlaying(e\SoundCHN)) Then e\SoundCHN = PlaySound(e\Sound)
+											If e\SoundCHN = 0 Then
+												e\SoundCHN = PlaySound (e\Sound)
+											Else
+												If (Not ChannelPlaying(e\SoundCHN)) Then e\SoundCHN = PlaySound(e\Sound)
+											EndIf
 										EndIf
 									EndIf
 								EndIf
 							EndIf
 						EndIf
 					EndIf 
-				Case "008";TODO, need more regulators
+				Case "008";Ready for pre-beta testing
 					If client\room = e\room Then	
 						
 						Achievements(Achv008)=True
@@ -3583,7 +3633,7 @@ Function UpdateNetworkEvents()
 									p\A = 1.0
 									RotateEntity p\pvt, -Rnd(180),Rnd(360),0
 								Next
-								If (Not WearingHazmat And PlayerRoom = e\room) Then 
+								If (Not WearingHazmat And MpClients(MpMyID)\room = e\room) Then 
 									Injuries=Injuries+0.1
 									Infect=1
 									Msg = "Something flew off and cut your arm"
@@ -3595,16 +3645,18 @@ Function UpdateNetworkEvents()
 							
 						End If
 					End If
-				Case "room012";TODO
-					If PlayerRoom = e\room Then
+				Case "room012";Ready for pre-beta testing
+					If client\room = e\room Then
 						If e\EventState=0 Then
-							If EntityDistance(Collider, e\room\RoomDoors[0]\obj)<2.5 Then
+							If EntityDistance(client\Collider, e\room\RoomDoors[0]\obj)<2.5 Then
 								Achievements(Achv012)=True
-								PlaySound HorrorSFX(7)
+								If MpClients(MpMyID)\room = e\room
+									PlaySound HorrorSFX(7)
+								EndIf
 								PlaySound2 (LeverSFX,Camera,e\room\RoomDoors[0]\obj) 
 								e\EventState=1
 								e\room\RoomDoors[0]\locked = False
-								UseDoor(e\room\RoomDoors[0],False)
+								UseDoor(e\room\RoomDoors[0],False,False)
 								e\room\RoomDoors[0]\locked = True
 							EndIf
 						Else
@@ -3614,14 +3666,21 @@ Function UpdateNetworkEvents()
 							
 							If e\Sound2=0 Then e\Sound2=LoadSound("SFX\012\ambient.ogg")
 							
-							If e\EventState<90 Then e\EventState=CurveValue(90,e\EventState,500)
+							If e\EventState<90 And e\timerreg = False
+								e\EventState=CurveValue(90,e\EventState,500)
+								e\timerreg = True
+							EndIf
 							PositionEntity e\room\Objects[2], EntityX(e\room\Objects[2],True),(-130-448*Sin(e\EventState))*RoomScale,EntityZ(e\room\Objects[2],True),True
 							
-							If e\EventState2 > 0 And e\EventState2 < 200 Then
+							If e\EventState2 > 0 And e\EventState2 < 200 And e\timerreg2 = False Then
 								e\EventState2 = e\EventState2 + FPSfactor
 								RotateEntity(e\room\Objects[1], CurveValue(85, EntityPitch(e\room\Objects[1]), 5), EntityYaw(e\room\Objects[1]), 0)
+								e\timerreg2 = True
 							Else
-								e\EventState2 = e\EventState2 + FPSfactor
+								If e\timerreg2 = False
+									e\EventState2 = e\EventState2 + FPSfactor
+									e\timerreg2 = True
+								EndIf
 								If e\EventState2<250 Then
 									ShowEntity e\room\Objects[3] 
 								Else
@@ -3630,7 +3689,7 @@ Function UpdateNetworkEvents()
 								EndIf
 							EndIf
 							
-							If Wearing714=False Then
+							If Wearing714=False And MpClients(MpMyID)\room = e\room Then
 								temp = False
 								If EntityVisible(e\room\Objects[2],Camera) Then temp = True
 								
@@ -3748,12 +3807,15 @@ Function UpdateNetworkEvents()
 							
 						EndIf
 					EndIf
-				Case "room2pipes106"	;TODO
+				Case "room2pipes106" ;Ready for pre-alpha testing
 					If (Not Contained106) Then 
 						If e\EventState = 0 Then
-							If PlayerRoom = e\room Then e\EventState = 1
+							If client\room = e\room Then e\EventState = 1
 						Else
-							e\EventState=(e\EventState+FPSfactor*0.7)
+							If e\timerreg = False
+								e\EventState=(e\EventState+FPSfactor*0.7)
+								e\timerreg = True
+							EndIf
 							;0-50 = menee keskelle
 							;50-200 = katselee ympärilleen
 							;200-250 = lähtee pois
@@ -3761,45 +3823,58 @@ Function UpdateNetworkEvents()
 							
 							If e\EventState < 50 Then
 								Curr106\Idle = True
-								PositionEntity(Curr106\Collider, EntityX(e\room\Objects[0], True), EntityY(Collider) - 0.15, EntityZ(e\room\Objects[0], True))
+								PositionEntity(Curr106\Collider, EntityX(e\room\Objects[0], True), EntityY(client\Collider) - 0.15, EntityZ(e\room\Objects[0], True))
 								PointEntity(Curr106\Collider, e\room\Objects[1])
-								MoveEntity(Curr106\Collider, 0, 0, EntityDistance(e\room\Objects[0], e\room\Objects[1])*0.5 * (e\EventState / 50.0))
-								Animate2(Curr106\obj, AnimTime(Curr106\obj), 284, 333, 0.02*35)
+								If e\timerreg2 = False
+									MoveEntity(Curr106\Collider, 0, 0, EntityDistance(e\room\Objects[0], e\room\Objects[1])*0.5 * (e\EventState / 50.0))
+									Animate2(Curr106\obj, AnimTime(Curr106\obj), 284, 333, 0.02*35)
+									e\timerreg2 = True
+								EndIf
 							ElseIf e\EventState < 200
 								Curr106\Idle = True
 								;DebugLog AnimTime(Curr106\obj) + AnimLength(Curr106\obj)
-								Animate2(Curr106\obj, AnimTime(Curr106\obj), 334, 494, 0.2)
+								If e\timerreg2 = False
+									Animate2(Curr106\obj, AnimTime(Curr106\obj), 334, 494, 0.2)
+									e\timerreg2 = True
+								EndIf
 								
 								;DebugLog AnimTime(Curr106\obj)
-								PositionEntity(Curr106\Collider, (EntityX(e\room\Objects[0], True)+EntityX(e\room\Objects[1], True))/2, EntityY(Collider) - 0.15, (EntityZ(e\room\Objects[0], True)+EntityZ(e\room\Objects[1], True))/2)
+								PositionEntity(Curr106\Collider, (EntityX(e\room\Objects[0], True)+EntityX(e\room\Objects[1], True))/2, EntityY(client\Collider) - 0.15, (EntityZ(e\room\Objects[0], True)+EntityZ(e\room\Objects[1], True))/2)
 								;MoveEntity(Curr106\Collider, 0, 0, EntityDistance(e\room\Objects[0], e\room\Objects[1])*0.5)
 								RotateEntity(Curr106\Collider,0, CurveValue(e\EventState,EntityYaw(Curr106\Collider),30.0),0,True)
-								If EntityDistance(Curr106\Collider, Collider)<4.0 Then
+								If EntityDistance(Curr106\Collider, client\Collider)<4.0 Then
 									pvt = CreatePivot()
 									PositionEntity(pvt, EntityX(Curr106\Collider),EntityY(Curr106\Collider),EntityZ(Curr106\Collider))
-									PointEntity pvt, Collider
+									PointEntity pvt, client\Collider
 									If WrapAngle(EntityYaw(pvt)-EntityYaw(Curr106\Collider))<80 Then
 										Curr106\State = -11
 										Curr106\Idle = False
-										PlaySound(HorrorSFX(10))
+										If MpClients(MpMyID)\room = e\room
+											PlaySound(HorrorSFX(10))
+										EndIf
 										e\EventState = 260
 									EndIf
 									FreeEntity pvt
 								EndIf
 							ElseIf e\EventState < 250
 								Curr106\Idle = True
-								PositionEntity(Curr106\Collider, EntityX(e\room\Objects[0], True), EntityY(Collider) - 0.15, EntityZ(e\room\Objects[0], True))
+								PositionEntity(Curr106\Collider, EntityX(e\room\Objects[0], True), EntityY(client\Collider) - 0.15, EntityZ(e\room\Objects[0], True))
 								PointEntity(Curr106\Collider, e\room\Objects[1])
 								;200-250     (- 150)      50-100
-								MoveEntity(Curr106\Collider, 0, 0, EntityDistance(e\room\Objects[0], e\room\Objects[1]) * ((e\EventState-150.0) / 100.0))
-								Animate2(Curr106\obj, AnimTime(Curr106\obj), 284, 333, 0.02*35)
+								If e\timerreg2 = False
+									MoveEntity(Curr106\Collider, 0, 0, EntityDistance(e\room\Objects[0], e\room\Objects[1]) * ((e\EventState-150.0) / 100.0))
+									Animate2(Curr106\obj, AnimTime(Curr106\obj), 284, 333, 0.02*35)
+									e\timerreg2 = True
+								EndIf
 							EndIf
 							ResetEntity(Curr106\Collider)
 							
 							;PositionEntity(Curr106\Collider, EntityX(Curr106\Collider), EntityY(Collider) - 0.20, EntityZ(Curr106\Collider))
 							
 							If (e\EventState / 250.0) > 0.3 And ((e\EventState - FPSfactor*0.7) / 250.0) <= 0.3 Then
-								e\SoundCHN = PlaySound(HorrorSFX(6))
+								If MpClients(MpMyID)\room = e\room
+									e\SoundCHN = PlaySound(HorrorSFX(6))
+								EndIf
 								BlurTimer = 800
 								d.Decals = CreateDecal(0, EntityX(e\room\Objects[2], True), EntityY(e\room\Objects[2], True), EntityZ(e\room\Objects[2], True), 0, e\room\angle - 90, Rnd(360)) ;90, Rnd(360), 0
 								d\Timer = 90000
@@ -3818,7 +3893,7 @@ Function UpdateNetworkEvents()
 							
 						End If
 					EndIf
-				Case "room2pit106";Ready for testing
+				Case "room2pit106";Ready for pre-alpha testing
 					If (Not Contained106) Then 
 						If e\EventState = 0 Then
 							If client\room = e\room Then e\EventState = 1
@@ -4076,7 +4151,7 @@ Function UpdateNetworkEvents()
 									Delete e
 								EndIf
 								
-							
+								
 							
 							
 						EndIf
@@ -4604,7 +4679,7 @@ Function UpdateNetworkEvents()
 							RotateEntity(e\room\Objects[6], 0, EntityYaw(e\room\Objects[6],True), 0, True)
 						EndIf
 					EndIf
-				Case "room2offices2";TODO, get global blinking times; event not that important
+				Case "room2offices2";TODO Probably don't need to sync
 					If PlayerRoom = e\room Then
 						If BlinkTimer<-8 And BlinkTimer >-12 Then
 							temp = Rand(1,4)
@@ -4612,7 +4687,7 @@ Function UpdateNetworkEvents()
 							RotateEntity e\room\Objects[0], 0, Rnd(360), 0
 						EndIf
 					EndIf
-				Case "room3pit";TODO, not sure about camera mechanics; event not that important
+				Case "room3pit";TODO, Probably don't need to sync
 					If client\room = e\room Then
 						If e\room\Objects[2] = 0 Then
 							e\room\Objects[2] =	LoadMesh("GFX\npcs\duck_low_res.b3d")
@@ -4640,8 +4715,8 @@ Function UpdateNetworkEvents()
 						
 						
 					EndIf						
-				Case "room2closets";TODO
-					If PlayerRoom = e\room And e\EventState=0 Then
+				Case "room2closets";Ready for pre-beta testing
+					If client\room = e\room And e\EventState=0 Then
 						
 						e\room\NPC[0] = CreateNPC(NPCtypeGuard, EntityX(e\room\Objects[0],True),EntityY(e\room\Objects[0],True),EntityZ(e\room\Objects[0],True))
 						e\room\NPC[0]\Sound=LoadSound("SFX\intro\scientist1.ogg")
@@ -4658,7 +4733,10 @@ Function UpdateNetworkEvents()
 						e\EventState=1
 					EndIf
 					If e\EventState>0 Then
-						e\EventState=e\EventState+FPSfactor
+						If e\timerreg = False
+							e\EventState=e\EventState+FPSfactor
+							e\timerreg = True
+						EndIf
 						If e\EventState < 70*3.5 Then
 							RotateEntity(e\room\NPC[1]\Collider,0,CurveAngle(e\room\angle+90,EntityYaw(e\room\NPC[1]\Collider),100.0),0,True)
 							
@@ -4681,7 +4759,7 @@ Function UpdateNetworkEvents()
 							TurnEntity e\room\NPC[1]\obj, 0, Sin(e\EventState)*25, 0
 							RotateEntity(e\room\NPC[1]\Collider,0,CurveAngle(EntityYaw(e\room\NPC[1]\obj),EntityYaw(e\room\NPC[1]\Collider),30.0),0,True)
 						Else
-							If e\EventState-FPSfactor < 70*6.5 Then 
+							If e\EventState-FPSfactor < 70*6.5 And MpClients(MpMyID)\room = e\room Then 
 								PlaySound (HorrorSFX(0))
 								PlaySound (LightSFX)
 							EndIf
@@ -11886,6 +11964,9 @@ Function InitNewGame()
 		If (r\RoomTemplate\Name = "start" And IntroEnabled = False) Or (r\RoomTemplate\Name = "173" And IntroEnabled) Then
 			PositionEntity (Collider, EntityX(r\obj), 1.0, EntityZ(r\obj))
 			PlayerRoom = r
+			If mpState <> 0
+				MpClients(MpMyID)\room = r
+			EndIf
 			
 			;CreateNPC(NPCtypeGuard, entityx(r\obj) + 40.0 * RoomScale, 420.0 * RoomScale, entityz(r\obj) + 1052.0 * RoomScale)
 		EndIf
@@ -13747,7 +13828,7 @@ End Function
 
 
 ;~IDEal Editor Parameters:
-;~F#D2#D6#334#350#3C3#4F6#517#2560#2573#2D5B#2FC9#2FE2#2FFE#3016#3031#304E#3067#3284#329A#32CC
-;~F#335E#3397#33AC#3413#3417#341F#3426#3431#3435#3470#3478#3482#3491#34AF#34DE#34F3#34FE#3502#3555#3563
-;~F#356B#3577#3580#35A6#35AB#35B0
+;~F#D2#D6#342#35E#3D1#3DE#476#504#525#25AE#25C1#2DA9#301A#3033#304F#3067#3082#309F#30B8#32D5
+;~F#32EB#331D#33AF#33E8#33FD#3464#3468#3470#3477#3482#3486#34C1#34C9#34D3#34E2#3500#352F#3544#354F#3553
+;~F#35A6#35B4#35BC#35C8#35D1#35F7#35FC#3601
 ;~C#Blitz3D
